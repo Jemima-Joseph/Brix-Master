@@ -1,0 +1,332 @@
+HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  
+  <title>Brix Master: Mobile</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #0f0f19;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: sans-serif;
+      /* Prevents pull-to-refresh and bounce scrolls on mobile Safari/Chrome */
+      overscroll-behavior: none; 
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    button {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <script>
+    let sugarCount = 0;
+    let waterCount = 0;
+    let particles = [];
+    let level = 1;
+    let lives = 3;
+    let gameState = "PLAY"; 
+
+    let levels = [
+      { name: "🧃 Apple Juice", target: 12, margin: 5.0, speed: 6, color: [255, 100, 100] },
+      { name: "🥤 Soda Syrup", target: 25, margin: 4.0, speed: 7, color: [100, 255, 100] },
+      { name: "🥞 Pancake Syrup", target: 60, margin: 3.0, speed: 9, color: [218, 165, 32] },
+      { name: "🍯 Thick Honey", target: 82, margin: 2.0, speed: 11, color: [255, 140, 0] },
+      { name: "💎 Rock Candy", target: 94, margin: 1.5, speed: 14, color: [0, 200, 255] }
+    ];
+
+    let btnS, btnW, btnEnter;
+
+    function setup() {
+      // Scale canvas tightly to fit mobile screens perfectly
+      let canvasWidth = windowWidth < 450 ? windowWidth : 450;
+      let canvasHeight = windowHeight < 750 ? windowHeight : 700;
+      let cnv = createCanvas(canvasWidth, canvasHeight);
+      
+      cnv.style('display', 'block');
+      cnv.style('margin', 'auto');
+
+      setupMobileButtons();
+    }
+
+    function setupMobileButtons() {
+      let btnY = height - 110; 
+      let btnWd = width * 0.42; 
+
+      btnS = createButton('➕ SUGAR');
+      btnS.position(width * 0.06, btnY);
+      btnS.size(btnWd, 80); 
+      btnS.mousePressed(() => addIngredient('sugar'));
+      styleButton(btnS, '#ffffff', '#222');
+
+      btnW = createButton('💧 WATER'); 
+      btnW.position(width * 0.52, btnY);
+      btnW.size(btnWd, 80);
+      btnW.mousePressed(() => addIngredient('water'));
+      styleButton(btnW, '#0088ff', '#fff');
+
+      btnEnter = createButton('CHECK RECIPE');
+      btnEnter.position(width * 0.06, btnY - 95);
+      btnEnter.size(width * 0.88, 65);
+      btnEnter.mousePressed(handleAction);
+      styleButton(btnEnter, '#00ffc8', '#222');
+    }
+
+    function styleButton(btn, bgColor, txtColor) {
+      btn.style('background-color', bgColor);
+      btn.style('color', txtColor);
+      btn.style('font-weight', 'bold');
+      btn.style('border-radius', '16px'); // Softer mobile aesthetic
+      btn.style('border', 'none');
+      btn.style('font-size', '16px'); // Larger text for mobile readability
+      btn.style('box-shadow', '0 4px 10px rgba(0,0,0,0.3)');
+    }
+
+    function draw() {
+      background(15, 15, 25); 
+
+      if (gameState === "PLAY") {
+        playGame();
+        btnS.show(); btnW.show(); btnEnter.html("CHECK RECIPE");
+      } else {
+        btnS.hide(); btnW.hide(); 
+        btnEnter.html("CONTINUE");
+        drawStateScreens();
+      }
+    }
+
+    function addIngredient(type) {
+      if (gameState === "PLAY") {
+        let col = type === 'sugar' ? 255 : [0, 150, 255];
+        particles.push({x: random(width*0.25, width*0.65), y: 140, type: type, color: col});
+      }
+    }
+
+    function handleAction() {
+      if (gameState === "PLAY") {
+        if (sugarCount + waterCount > 0) submitBatch();
+      } else {
+        if (gameState === "GAMEOVER" || gameState === "GAME_WON") {
+          level = 1; lives = 3;
+        }
+        resetBatch();
+        gameState = "PLAY";
+      }
+    }
+
+    function playGame() {
+      let cur = levels[min(level - 1, levels.length - 1)];
+      let totalParts = sugarCount + waterCount;
+      let brix = totalParts > 0 ? (sugarCount / totalParts) * 100 : 0;
+
+      // Header Area
+      fill(25, 25, 45);
+      noStroke();
+      rect(0, 0, width, 125);
+      
+      textAlign(LEFT);
+      fill(0, 255, 255);
+      textSize(18);
+      text("LEVEL " + level + "/5: " + cur.name, 20, 35);
+      
+      fill(255);
+      textSize(13);
+      text("Target: " + cur.target + "% Brix", 20, 60);
+      
+      if (level < 5) {
+        text("Margin: ±" + cur.margin + "%", 20, 80);
+      } else {
+        fill(255, 50, 50);
+        text("BLIND MODE: NO HINTS!", 20, 80);
+      }
+      
+      textAlign(RIGHT);
+      text("LIVES: " + "❤️".repeat(lives), width - 20, 35);
+
+      // Beaker
+      stroke(255, 50);
+      strokeWeight(5);
+      noFill();
+      let beakerW = width * 0.48;
+      let beakerH = height * 0.35;
+      let beakerX = width * 0.08;
+      let beakerY = 180;
+      rect(beakerX, beakerY, beakerW, beakerH, 0, 0, 20, 20);
+
+      // Liquid Fill Logic
+      noStroke();
+      let fillR = map(brix, 0, 100, 100, cur.color[0]);
+      let fillG = map(brix, 0, 100, 150, cur.color[1]);
+      let fillB = map(brix, 0, 100, 255, cur.color[2]);
+      fill(fillR, fillG, fillB, 200);
+      
+      let h = map(totalParts, 0, 150, 0, beakerH - 10); 
+      rect(beakerX + 3, beakerY + beakerH - h - 3, beakerW - 6, h, 0, 0, 18, 18);
+
+      // Mobile Side Gauge (Brix Tracker)
+      let gaugeX = width * 0.80;
+      let gaugeY = 190;
+      let gaugeH = beakerH * 0.9;
+
+      stroke(40, 40, 60);
+      strokeWeight(14);
+      line(gaugeX, gaugeY, gaugeX, gaugeY + gaugeH);
+
+      stroke(255, 180, 0);
+      let currentBrixY = map(brix, 0, 100, gaugeY + gaugeH, gaugeY);
+      line(gaugeX, gaugeY + gaugeH, gaugeX, currentBrixY);
+
+      stroke(255, 50, 50);
+      strokeWeight(4);
+      let targetBrixY = map(cur.target, 0, 100, gaugeY + gaugeH, gaugeY);
+      line(gaugeX - 12, targetBrixY, gaugeX + 12, targetBrixY);
+
+      noStroke();
+      fill(255, 180, 0);
+      textSize(11);
+      textAlign(CENTER);
+      text("BRIX", gaugeX, gaugeY - 12);
+
+      // Hint Text Banner
+      textAlign(CENTER);
+      let diff = brix - cur.target;
+      let hint = "Drop Ingredients";
+      let hintCol = 200;
+      
+      if (level === 5) {
+        hint = "Trust your instincts!";
+        hintCol = [255, 50, 50];
+      } else if (totalParts > 5) {
+        if (abs(diff) <= cur.margin) {
+          hint = "✨ LOOKS PERFECT!";
+          hintCol = [0, 255, 150];
+        } else {
+          hint = diff < 0 ? "🧂 Needs Sugar" : "💧 Needs Water";
+        }
+      }
+      fill(hintCol);
+      textSize(15);
+      text(hint, width/2, 115);
+
+      // Live Readouts
+      noStroke();
+      textAlign(LEFT);
+      fill(255);
+      textSize(18);
+      text(`🧂 Sugar: ${sugarCount}`, width * 0.08, height - 210);
+
+      textAlign(RIGHT);
+      fill(100, 200, 255);
+      text(`💧 Water: ${waterCount}`, width * 0.92, height - 210);
+
+      textAlign(CENTER);
+      fill(255, 230, 100);
+      textSize(24);
+      text(`${brix.toFixed(1)}%`, width / 2, height - 210);
+
+      // Particles Loop
+      for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        fill(p.color);
+        p.type === 'sugar' ? rect(p.x, p.y, 10, 10) : ellipse(p.x, p.y, 10, 14);
+        p.y += cur.speed; 
+        if (p.y > (beakerY + beakerH - h)) {
+          p.type === 'sugar' ? sugarCount++ : waterCount++;
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    function submitBatch() {
+      let brix = (sugarCount / (sugarCount + waterCount)) * 100;
+      let cur = levels[level - 1];
+      if (abs(brix - cur.target) <= cur.margin) {
+        gameState = level >= levels.length ? "GAME_WON" : "WIN";
+        if (gameState === "WIN") level++;
+      } else {
+        lives--;
+        gameState = lives > 0 ? "LOSE" : "GAMEOVER";
+      }
+    }
+
+    function resetBatch() {
+      sugarCount = 0; waterCount = 0; particles = [];
+    }
+
+    function drawStateScreens() {
+      background(10, 10, 20, 230);
+      
+      fill(30, 30, 50);
+      stroke(255, 255, 255, 20);
+      strokeWeight(2);
+      rect(width * 0.08, height * 0.25, width * 0.84, height * 0.35, 24);
+      
+      textAlign(CENTER);
+      noStroke();
+      
+      if (gameState === "WIN") {
+        fill(0, 255, 150);
+        textSize(26);
+        text("BATCH APPROVED! 🎉", width / 2, height * 0.36);
+        fill(200);
+        textSize(15);
+        text("Sweetness target hit!\nMoving onto the next recipe.", width / 2, height * 0.44);
+      }
+      
+      if (gameState === "LOSE") {
+        fill(255, 100, 100);
+        textSize(26);
+        text("BATCH REJECTED! ❌", width / 2, height * 0.36);
+        fill(200);
+        textSize(15);
+        text(`Ratios are outside bounds.\nYou have ${lives} ${lives === 1 ? 'life' : 'lives'} left!`, width / 2, height * 0.44);
+      }
+      
+      if (gameState === "GAMEOVER") {
+        fill(255, 50, 50);
+        textSize(30);
+        text("GAME OVER 💀", width / 2, height * 0.36);
+        fill(200);
+        textSize(15);
+        text("You ran out of lives.\nTap CONTINUE to restart.", width / 2, height * 0.44);
+      }
+      
+      if (gameState === "GAME_WON") {
+        fill(255, 215, 0);
+        textSize(28);
+        text("MASTER CHEF! 🏆", width / 2, height * 0.36);
+        fill(200);
+        textSize(15);
+        text("Flawless chemistry!\nYou solved every single recipe.", width / 2, height * 0.44);
+      }
+    }
+
+    function windowResized() {
+      let canvasWidth = windowWidth < 450 ? windowWidth : 450;
+      let canvasHeight = windowHeight < 750 ? windowHeight : 700;
+      resizeCanvas(canvasWidth, canvasHeight);
+      btnS.position(width * 0.06, height - 110);
+      btnW.position(width * 0.52, height - 110);
+      btnEnter.position(width * 0.06, height - 205);
+    }
+  </script>
+</body>
